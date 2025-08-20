@@ -268,3 +268,9 @@ type ByPage[T any] struct {
 	Total int64 `json:"total"`
 	Data  []T   `json:"data"`
 }
+
+// HealthResult is the result of the health check.
+type HealthResult struct {
+	Status string `json:"status"`
+	Time   string `json:"time"`
+}
