@@ -238,4 +238,5 @@ class ImageSearchService:
             results = results[:top_k]
         
         logger.info(f"搜索完成，查询: '{text_query}', 找到 {len(results)} 个结果")
+        # logger.info(results)
         return results

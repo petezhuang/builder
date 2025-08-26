@@ -60,7 +60,8 @@ def create_app(config_name='default'):
             'endpoints': {
                 'health': '/api/health',
                 'search': '/api/search (POST)',
-                'search_by_url': '/api/search/url (POST)'
+                'search_by_url': '/api/search/url (POST)',
+                'search_resource': '/api/search/resource (POST)'
             }
         }
     

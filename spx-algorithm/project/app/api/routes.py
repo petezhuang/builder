@@ -210,3 +210,102 @@ def search_images_by_url():
             'code': 'INTERNAL_ERROR',
             'details': str(e)
         }), 500
+
+
+@api_bp.route('/search/resource', methods=['POST'])
+def search_resource_svgs():
+    """
+    搜索resource目录下的SVG文件接口
+    
+    接受JSON数据：
+    {
+        "text": "查询文本",
+        "k": 5  // 可选，返回前k张图片
+    }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'error': '请求体必须是有效的JSON',
+                'code': 'INVALID_JSON'
+            }), 400
+        
+        text_query = data.get('text', '').strip()
+        if not text_query:
+            return jsonify({
+                'error': '查询文本不能为空',
+                'code': 'MISSING_TEXT_QUERY'
+            }), 400
+        
+        k = data.get('k')
+        if k is not None:
+            if not isinstance(k, int) or k <= 0:
+                return jsonify({
+                    'error': 'k参数必须是正整数',
+                    'code': 'INVALID_K'
+                }), 400
+        
+        # 获取resource目录路径（相对于项目根目录）
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        resource_dir = os.path.join(project_root, 'resource')
+        
+        if not os.path.exists(resource_dir):
+            return jsonify({
+                'error': 'resource目录不存在',
+                'code': 'RESOURCE_DIR_NOT_FOUND'
+            }), 404
+        
+        # 递归查找所有svg文件
+        svg_paths = []
+        for root, _, files in os.walk(resource_dir):
+            for file in files:
+                if file.lower().endswith('.svg'):
+                    svg_paths.append(os.path.join(root, file))
+        
+        if not svg_paths:
+            return jsonify({
+                'error': 'resource目录下没有找到SVG文件',
+                'code': 'NO_SVG_FILES_FOUND'
+            }), 404
+        
+        # 初始化服务（如果还没有初始化）
+        if search_service is None:
+            init_search_service()
+        
+        # 执行搜索
+        results = search_service.search_images(text_query, svg_paths, k)
+        
+        # 处理结果，返回相对于resource目录的路径
+        processed_results = []
+        for result in results:
+            relative_path = os.path.relpath(result['image_path'], resource_dir)
+            processed_results.append({
+                'rank': result['rank'],
+                'similarity': result['similarity'],
+                # 'file_path': relative_path,
+                'image_path': result['image_path']
+            })
+        
+        # return jsonify({
+        #     'query': text_query,
+        #     'resource_directory': resource_dir,
+        #     'total_svg_files': len(svg_paths),
+        #     'results_count': len(processed_results),
+        #     'results': processed_results
+        # })
+        logger.info(processed_results)
+        return jsonify({
+            'query': text_query,
+            'results_count': len(processed_results),
+            'results': processed_results
+        })
+    
+    
+    except Exception as e:
+        logger.error(f"搜索resource SVG文件时出现错误: {e}")
+        return jsonify({
+            'error': '内部服务器错误',
+            'code': 'INTERNAL_ERROR',
+            'details': str(e)
+        }), 500
