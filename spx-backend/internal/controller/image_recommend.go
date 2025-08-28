@@ -14,8 +14,9 @@ import (
 
 // ImageRecommendParams represents parameters for image recommendation.
 type ImageRecommendParams struct {
-	Text string `json:"prompt"`
-	TopK int    `json:"top_k,omitempty"`
+	Text     string          `json:"prompt"`
+	TopK     int             `json:"top_k,omitempty"`
+	Provider svggen.Provider `json:"provider,omitempty"`
 }
 
 // Validate validates the image recommendation parameters.
@@ -50,8 +51,8 @@ type RecommendedImageResult struct {
 
 // AlgorithmSearchRequest represents the request to spx-algorithm service.
 type AlgorithmSearchRequest struct {
-	Text string `json:"text"`
-	TopK int    `json:"top_k"`
+	Text      string  `json:"text"`
+	TopK      int     `json:"top_k"`
 	Threshold float64 `json:"threshold"`
 }
 
@@ -88,10 +89,10 @@ func (ctrl *Controller) RecommendImages(ctx context.Context, params *ImageRecomm
 			ID  int64  `json:"id"`
 			URL string `json:"url"`
 		}
-		
+
 		//err := ctrl.db.Table("aiResource").Select("id, url").Where("url = ? AND deleted_at IS NULL", algResult.ImagePath).First(&aiResource).Error
 		//if err == nil {
-			// Found matching resource in database
+		// Found matching resource in database
 		foundResults = append(foundResults, RecommendedImageResult{
 			ID:         aiResource.ID,
 			ImagePath:  algResult.ImagePath,
@@ -99,7 +100,7 @@ func (ctrl *Controller) RecommendImages(ctx context.Context, params *ImageRecomm
 			Rank:       algResult.Rank,
 			Source:     "search",
 		})
-		
+
 		if len(foundResults) >= params.TopK {
 			break // We have enough results
 		}
@@ -114,8 +115,8 @@ func (ctrl *Controller) RecommendImages(ctx context.Context, params *ImageRecomm
 	if len(foundResults) < params.TopK {
 		needed := params.TopK - len(foundResults)
 		logger.Printf("Need to generate %d AI SVG images", needed)
-		
-		generatedResults, err := ctrl.generateAISVGs(ctx, params.Text, needed, len(foundResults))
+
+		generatedResults, err := ctrl.generateAISVGs(ctx, params.Text, params.Provider, needed, len(foundResults))
 		if err != nil {
 			logger.Printf("Failed to generate AI SVGs: %v", err)
 			// Don't fail the entire request, just return what we found
@@ -129,9 +130,9 @@ func (ctrl *Controller) RecommendImages(ctx context.Context, params *ImageRecomm
 		foundResults[i].Rank = i + 1
 	}
 
-	logger.Printf("Recommendation completed - total %d results (%d from search, %d generated)", 
-		len(foundResults), 
-		countBySource(foundResults, "search"), 
+	logger.Printf("Recommendation completed - total %d results (%d from search, %d generated)",
+		len(foundResults),
+		countBySource(foundResults, "search"),
 		countBySource(foundResults, "generated"))
 
 	return &ImageRecommendResult{
@@ -146,9 +147,9 @@ func (ctrl *Controller) callAlgorithmService(ctx context.Context, text string, t
 	algorithmURL := ctrl.getAlgorithmServiceURL() + "/api/search/resource"
 
 	reqData := AlgorithmSearchRequest{
-		Text: text,
-		TopK: topK,
-		Threshold: 0.1,
+		Text:      text,
+		TopK:      topK,
+		Threshold: 0.25,
 	}
 
 	reqBody, err := json.Marshal(reqData)
@@ -185,7 +186,7 @@ func (ctrl *Controller) callAlgorithmService(ctx context.Context, text string, t
 }
 
 // generateAISVGs generates AI SVG images concurrently to fill the gap when not enough images are found.
-func (ctrl *Controller) generateAISVGs(ctx context.Context, text string, count int, startRank int) ([]RecommendedImageResult, error) {
+func (ctrl *Controller) generateAISVGs(ctx context.Context, text string, provider svggen.Provider, count int, startRank int) ([]RecommendedImageResult, error) {
 	logger := log.GetReqLogger(ctx)
 	if count <= 0 {
 		return nil, nil
@@ -205,7 +206,7 @@ func (ctrl *Controller) generateAISVGs(ctx context.Context, text string, count i
 			// Create SVG generation parameters
 			params := &GenerateSVGParams{
 				Prompt:   text,
-				Provider: svggen.ProviderSVGIO, // Use default provider
+				Provider: provider,
 				Theme:    ThemeNone,
 			}
 
